@@ -76,6 +76,7 @@ x-airflow-common:
     # User env var
     PROJECT_ID: ${PROJECT_ID}
     BUCKET_NAME: ${BUCKET_NAME}
+    AUDIOBRIEF_BUCKET_NAME: ${AUDIOBRIEF_BUCKET_NAME}
 
     DB_NAME: ${DB_NAME}
     DB_USER: ${DB_USER}
@@ -86,6 +87,7 @@ x-airflow-common:
   volumes:
     - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags
     - ${AIRFLOW_PROJ_DIR:-.}/utils:/opt/airflow/utils
+    - ${AIRFLOW_PROJ_DIR:-.}/books:/opt/airflow/books
     - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
     - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
     - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
