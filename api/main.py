@@ -1,5 +1,6 @@
 import os
 import uvicorn
+import tempfile
 from dotenv import load_dotenv
 from fastapi.responses import StreamingResponse
 from fastapi import FastAPI, Request, HTTPException
@@ -56,10 +57,12 @@ async def audio(request: Request, bookId: str, chapterId: str):
                 file_path = f"{bookId}/chapters/{chapterId}/audio.mp3"
 
                 blob = read_audio_file_without_downloading(file_path)
-                content_type = blob.content_type or "application/pdf"
-                downloaded_data = blob.download_as_bytes()
+                content_type = blob.content_type or "audio/mp3" or "audio/mpeg"
 
-                return StreamingResponse(iter(downloaded_data), media_type=content_type)
+                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
+                blob.download_to_file(temp_file)
+
+                return StreamingResponse(open(temp_file.name, "rb"), media_type=content_type)
             else:
                 raise HTTPException(status_code=401, detail=f"Access denied")
         else:

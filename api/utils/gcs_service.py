@@ -2,21 +2,22 @@ import os
 from dotenv import load_dotenv
 from google.cloud import storage
 
-load_dotenv('../.env')
+# load_dotenv('../.env')
 
 
 def read_text_file_without_downloading(file_name):
     try:
         os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = "./utils/metadata-sql.json"
-        # Initialize the client
-        client = storage.Client()
 
-        # Get the bucket and blob
+        storage_client = storage.Client()
+
+        # Replace with your bucket name
         bucket_name = os.environ["AUDIOBRIEF_BUCKET_NAME"]
-        bucket = client.get_bucket(bucket_name)
+
+        # Retrieve the audio file from Google Cloud Storage
+        bucket = storage_client.bucket(bucket_name)
         blob = bucket.blob(file_name)
 
-        # Streaming the content of the file in chunks
         chunks = []
         with blob.open("r") as file_stream:
             while True:
