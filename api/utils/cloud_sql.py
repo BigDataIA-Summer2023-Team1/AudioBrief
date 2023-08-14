@@ -1,9 +1,7 @@
 import os
 from dotenv import load_dotenv
-
-from google.cloud.sql.connector import Connector
-
 from sqlalchemy.orm import sessionmaker
+from google.cloud.sql.connector import Connector
 from sqlalchemy import create_engine, MetaData, Table, Column, String, Integer, select, exists, or_, JSON, distinct
 
 load_dotenv("../.env")
@@ -160,6 +158,7 @@ def fetch_authors(engine):
         return authors
     except Exception as e:
         print(str(e))
+
 
 def fetch_books_by_author(engine, data):
     try:
