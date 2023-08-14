@@ -4,12 +4,15 @@ import uuid
 import pandas as pd
 from dotenv import load_dotenv
 from datetime import timedelta
-
+import pprint
 from airflow.models import DAG
 from airflow.models.param import Param
 from airflow.utils.dates import days_ago
-from airflow.operators.python_operator import PythonOperator
+from airflow.models import TaskInstance
+
 from airflow.operators.subdag_operator import SubDagOperator
+from airflow.operators.python_operator import PythonOperator
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.models.baseoperator import BaseOperator
 
 
@@ -34,20 +37,26 @@ def fetch_metadata(**context):
         last_row_to_process = data['ID'].iloc[-1]
 
         context['ti'].xcom_push(key="metadata", value={"last_read_index": last_read_index, "no_of_records": no_of_records,
-                                                       "last_row_to_process": last_row_to_process})
+                                                      "last_row_to_process": last_row_to_process})
+
+        print("================================================================")
+        print(context["ti"].xcom_pull(key="metadata", dag_id="scrape_books_and_extract_chapters_and_load"))
+        print("================================================================")
     except Exception as e:
         msg = str(e)
 
 
-def data_extraction(pipeline_no, subtask_id, **context):
+def data_extraction(pipeline_no, **context):
     try:
         no_of_pipelines = context['params']['no_of_pipelines']
 
-        metadata = context['ti'].xcom_pull(task_ids="read_metadata", key='metadata')
-        print("metadata: ", metadata)
+        metadata = context["ti"].xcom_pull(key="metadata", task_ids="read_metadata",
+                                           dag_id="scrape_books_and_extract_chapters_and_load")
+
 
         dataset_path = "https://raw.githubusercontent.com/BigDataIA-Summer2023-Team1/project/main/test-data.csv"
-        data = pd.read_csv(dataset_path, skiprows=metadata["last_read_index"])
+        # data = pd.read_csv(dataset_path, skiprows=metadata["last_read_index"])
+        data = pd.read_csv(dataset_path)
 
         data_per_pipeline = math.ceil(metadata["no_of_records"] / no_of_pipelines)
         data = data[(pipeline_no - 1) * data_per_pipeline:pipeline_no * data_per_pipeline]
@@ -61,18 +70,18 @@ def data_extraction(pipeline_no, subtask_id, **context):
             book_metadata = {
                 "book_id": bookID,
                 "source_id": row["ID"],
-                "title": "" if row["Title"] is float('nan') else row["Title"],
-                "author": "" if row["Author"] is float('nan') else row["Author"],
-                "category": "" if row["Category"] is float('nan') else row["Category"],
-                "publish": 0 if row["Publish"] is float('nan') else row["Publish"],
-                "pages": 0 if row["Page"] is float('nan') else row["Page"],
+                "title": row["Title"] if row["Title"] else "",
+                "author": row["Author"] if row["Author"] else "",
+                "category": row["Category"] if row["Category"] else "",
+                "publish": row["Publish"] if row["Publish"] else 0,
+                "pages": row["Page"] if row["Page"] else 0,
             }
             books_metadata.append(book_metadata)
 
             # TODO: check if required fields are present in raw data
             books_exists = csql.check_if_books_exist(sql_client, {"sourceId": row["ID"], "title": row["Title"]})
-            if not books_exists:
-                pass
+            if books_exists:
+                return
                 # TODO: Log and raise exception that file already processed
 
             # TODO: download file from GCP return file path
@@ -87,9 +96,22 @@ def data_extraction(pipeline_no, subtask_id, **context):
 
             # TODO: Check if we can make process_chapters step as async
             # fp.process_chapters(file_path, chapters_metadata)
-            context['ti'].xcom_push(key=subtask_id, value={"file_path": file_path,
-                                                           "book_metadata": book_metadata,
-                                                           "chapters_metadata": chapters_metadata})
+
+            # context['ti'].xcom_push(key=subtask_id, value={"file_path": file_path,
+            #                                                "book_metadata": book_metadata,
+            #                                                "chapters_metadata": chapters_metadata})
+            print("================================================================")
+            print(book_metadata)
+            print(chapters_metadata)
+            print("================================================================")
+            trigger_task = TriggerDagRunOperator(
+                task_id=bookID,
+                trigger_dag_id='trigger_parallel_processing_dag',  # Name of the separate DAG
+                conf={"file_path": file_path, "book_metadata": book_metadata, "chapters_metadata": chapters_metadata},
+                dag=scrape_dag,
+            )
+
+            trigger_task
 
 
         # TODO: send async bulk event to store books metadata in cloud sql and log for any errors
@@ -99,19 +121,20 @@ def data_extraction(pipeline_no, subtask_id, **context):
         msg = str(e)
 
 
-def process_chapters_in_pipeline(subtask_pipeline_no, subtask_id, **context):
+def process_chapters_in_pipeline(subtask_pipeline_no, **context):
     try:
         no_of_threads = 3
 
-        metadata = context['ti'].xcom_pull(task_ids="extract_chapters_list", key=subtask_id)
-        chapters_metadata = metadata["chapters_metadata"]
+        # metadata = context['ti'].xcom_pull(task_ids="extract_chapters_list", key=subtask_id)
+        chapters_metadata = context['dag_run'].conf.get('chapters_metadata')
+        file_path = context['dag_run'].conf.get('file_path')
 
         no_of_chapters_per_pipeline = math.ceil(len(chapters_metadata) / no_of_threads)
 
         chapters_metadata = chapters_metadata[(subtask_pipeline_no - 1) * no_of_chapters_per_pipeline:subtask_pipeline_no * no_of_chapters_per_pipeline]
 
         for chapter_metadata in chapters_metadata:
-            fp.extract_chapter(metadata["file_path"], chapter_metadata)
+            fp.extract_chapter(file_path, chapter_metadata)
     except Exception as e:
         msg = str(e)
 
@@ -139,62 +162,77 @@ def update_metadata(**context):
         msg = str(e)
 
 
-def create_subdag(parent_dag_name, child_dag_name, pipeline_no, args):
-    dag_subdag = DAG(
-        dag_id=f'{parent_dag_name}.{child_dag_name}',
-        # default_args=args,
-        schedule=None,  # Set to None if you want to trigger manually
-        start_date=days_ago(0),
-        # catchup=False,
-        dagrun_timeout=timedelta(minutes=60),
-        params=args,
-    )
-
-    with dag_subdag:
-        step_1 = PythonOperator(
-            task_id='extract_chapters_list',
-            python_callable=data_extraction,
-            provide_context=True,
-            op_kwargs={"pipeline_no": pipeline_no, "subtask_id": f'{parent_dag_name}-{child_dag_name}'},
-            dag=dag_subdag
-        )
-
-        step_2 = PythonOperator(
-            task_id='step_2',
-            python_callable=process_chapters_in_pipeline,
-            provide_context=True,
-            op_kwargs={"subtask_pipeline_no": 1, "subtask_id": f'{parent_dag_name}-{child_dag_name}'},
-            dag=dag_subdag
-        )
-
-        step_3 = PythonOperator(
-            task_id='step_3',
-            python_callable=process_chapters_in_pipeline,
-            provide_context=True,
-            op_kwargs={"subtask_pipeline_no": 2, "subtask_id": f'{parent_dag_name}-{child_dag_name}'},
-            dag=dag_subdag
-        )
-
-        step_4 = PythonOperator(
-            task_id='step_4',
-            python_callable=process_chapters_in_pipeline,
-            provide_context=True,
-            op_kwargs={"subtask_pipeline_no": 3, "subtask_id": f'{parent_dag_name}-{child_dag_name}'},
-            dag=dag_subdag
-        )
-
-        step_5 = PythonOperator(
-            task_id='step_5',
-            python_callable=update_books_metadata,
-            provide_context=True,
-            op_kwargs={"subtask_id": f'{parent_dag_name}-{child_dag_name}'},
-            dag=dag_subdag
-        )
-
-        # step_2.set_upstream(step_1)
-        step_1 >> [step_2, step_3, step_4] >> step_5
-
-    return dag_subdag
+# def create_subdag(parent_dag_name, child_dag_name, pipeline_no, args):
+#     dag_subdag = DAG(
+#         dag_id=f'{parent_dag_name}.{child_dag_name}',
+#         schedule=None,  # Set to None if you want to trigger manually
+#         start_date=days_ago(0),
+#         catchup=False,
+#         dagrun_timeout=timedelta(minutes=60),
+#         params=args,
+#     )
+#
+#     with dag_subdag:
+#         step_1 = PythonOperator(
+#             task_id='extract_chapters_list',
+#             python_callable=data_extraction,
+#             provide_context=True,
+#             op_kwargs={"pipeline_no": pipeline_no, "subtask_id": f'{parent_dag_name}-{child_dag_name}'},
+#             dag=dag_subdag
+#         )
+#
+#         step_2 = PythonOperator(
+#             task_id='step_2',
+#             python_callable=process_chapters_in_pipeline,
+#             provide_context=True,
+#             op_kwargs={"subtask_pipeline_no": 1, "subtask_id": f'{parent_dag_name}-{child_dag_name}'},
+#             dag=dag_subdag
+#         )
+#
+#         step_3 = PythonOperator(
+#             task_id='step_3',
+#             python_callable=process_chapters_in_pipeline,
+#             provide_context=True,
+#             op_kwargs={"subtask_pipeline_no": 2, "subtask_id": f'{parent_dag_name}-{child_dag_name}'},
+#             dag=dag_subdag
+#         )
+#
+#         step_4 = PythonOperator(
+#             task_id='step_4',
+#             python_callable=process_chapters_in_pipeline,
+#             provide_context=True,
+#             op_kwargs={"subtask_pipeline_no": 3, "subtask_id": f'{parent_dag_name}-{child_dag_name}'},
+#             dag=dag_subdag
+#         )
+#
+#         step_5 = PythonOperator(
+#             task_id='step_5',
+#             python_callable=update_books_metadata,
+#             provide_context=True,
+#             op_kwargs={"subtask_id": f'{parent_dag_name}-{child_dag_name}'},
+#             dag=dag_subdag
+#         )
+#
+#         # step_6 = PythonOperator(
+#         #     task_id='step_6',
+#         #     python_callable=update_books_metadata,
+#         #     provide_context=True,
+#         #     op_kwargs={"subtask_id": f'{parent_dag_name}-{child_dag_name}'},
+#         #     dag=dag_subdag
+#         # )
+#         # step_7 = PythonOperator(
+#         #     task_id='step_7',
+#         #     python_callable=update_books_metadata,
+#         #     provide_context=True,
+#         #     op_kwargs={"subtask_id": f'{parent_dag_name}-{child_dag_name}'},
+#         #     dag=dag_subdag
+#         # )
+#
+#         step_1 >> step_2 >> step_5
+#         # step_1 >> step_3 >> step_6
+#         # step_1 >> step_4 >> step_7
+#
+#     return dag_subdag
 
 
 #  Create DAG to load data
@@ -203,6 +241,45 @@ user_input = {
     "no_of_pipelines": Param(default=4, type='number'),
     "no_of_threads": Param(default=3, type='number'),
 }
+
+trigger_parallel_processing_dag = DAG(
+    dag_id='trigger_parallel_processing_dag',
+    schedule_interval=None,  # You might want to set this based on your needs
+    start_date=days_ago(0),
+    catchup=False,
+    params=user_input,
+)
+
+with trigger_parallel_processing_dag:
+    step_1 = PythonOperator(
+        task_id='step_2',
+        python_callable=process_chapters_in_pipeline,
+        provide_context=True,
+        op_kwargs={"subtask_pipeline_no": 1},
+        dag=trigger_parallel_processing_dag
+    )
+
+    step_2 = PythonOperator(
+        task_id='step_3',
+        python_callable=process_chapters_in_pipeline,
+        provide_context=True,
+        op_kwargs={"subtask_pipeline_no": 2},
+        dag=trigger_parallel_processing_dag
+    )
+
+    step_3 = PythonOperator(
+        task_id='step_4',
+        python_callable=process_chapters_in_pipeline,
+        provide_context=True,
+        op_kwargs={"subtask_pipeline_no": 3},
+        dag=trigger_parallel_processing_dag
+    )
+
+    step_1, step_2, step_3
+
+
+
+
 
 scrape_dag = DAG(
     dag_id="scrape_books_and_extract_chapters_and_load",
@@ -222,7 +299,6 @@ with scrape_dag:
         dag=scrape_dag
     )
 
-    # Parallel processing tasks
     # pipeline_1 = PythonOperator(
     #     task_id='pipeline_1_process_files',
     #     python_callable=data_extraction,
@@ -230,63 +306,26 @@ with scrape_dag:
     #     op_kwargs={"pipeline_no": 1},
     #     dag=scrape_dag
     # )
-    #
-    # pipeline_2 = PythonOperator(
-    #     task_id='pipeline_2_process_files',
-    #     python_callable=data_extraction,
-    #     provide_context=True,
-    #     op_kwargs={"pipeline_no": 2},
-    #     dag=scrape_dag
-    # )
-    #
-    # pipeline_3 = PythonOperator(
-    #     task_id='pipeline_3_process_files',
-    #     python_callable=data_extraction,
-    #     provide_context=True,
-    #     op_kwargs={"pipeline_no": 3},
-    #     dag=scrape_dag
-    # )
-    #
-    # pipeline_4 = PythonOperator(
-    #     task_id='pipeline_4_process_files',
-    #     python_callable=data_extraction,
-    #     provide_context=True,
-    #     op_kwargs={"pipeline_no": 4},
-    #     dag=scrape_dag
-    # )
-    pipeline_1 = SubDagOperator(
-        task_id='pipeline_1_process_files',
-        subdag=create_subdag('scrape_books_and_extract_chapters_and_load', 'pipeline_1_process_files', 1, user_input),
-        dag=scrape_dag,
-        # provide_context=True,
-    )
 
-    # pipeline_2 = SubDagOperator(
-    #     task_id='pipeline_2_process_files',
-    #     subdag=create_subdag('scrape_books_and_extract_chapters_and_load', 'pipeline_2_process_files', 2, user_input),
-    #     dag=scrape_dag,
-    #     # provide_context=True,
+    # pipeline_1 = SubDagOperator(
+    #     task_id='pipeline_1_process_files',
+    #     subdag=create_subdag('scrape_books_and_extract_chapters_and_load', 'pipeline_1_process_files', 1, user_input),
+    #     dag=scrape_dag
     # )
-    #
-    # pipeline_3 = SubDagOperator(
-    #     task_id='pipeline_3_process_files',
-    #     subdag=create_subdag('scrape_books_and_extract_chapters_and_load', 'pipeline_3_process_files', 3, user_input),
-    #     dag=scrape_dag,
-    #     # provide_context=True,
-    # )
-    #
-    # pipeline_4 = SubDagOperator(
-    #     task_id='pipeline_4_process_files',
-    #     subdag=create_subdag('scrape_books_and_extract_chapters_and_load', 'pipeline_4_process_files', 4, user_input),
-    #     dag=scrape_dag,
-    #     # provide_context=True,
-    # )
+
+    pipeline_1 = PythonOperator(
+        task_id='pipeline_1_process_files',
+        python_callable=data_extraction,
+        provide_context=True,
+        op_kwargs={"pipeline_no": 1},
+        dag=scrape_dag
+    )
 
     modify_metadata = PythonOperator(
         task_id='update_metadata',
         python_callable=update_metadata,
-        dag=scrape_dag
-        # provide_context=True,
+        dag=scrape_dag,
+        provide_context=True,
     )
 
     # Define task dependencies
