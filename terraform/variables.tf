@@ -31,6 +31,7 @@ variable "gce_ssh_user" {
   default = "ubuntu"
 }
 
+
 variable "ssh_key_filename" {
   description = "the generated ssh keypair filename"
   type        = string

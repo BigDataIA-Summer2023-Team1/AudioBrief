@@ -193,7 +193,7 @@ def fetch_books_by_author(engine, data):
                           books_table.c.chapters)
             books = engine.execute(stmt).fetchall()
 
-        books = [{"id": book[0], "title": book[1], "chapters": book[2]} for book in books]
+        books = [{"id": book[1], "title": book[0], "chapters": book[2]} for book in books]
 
         session.close()
         engine.dispose()
