@@ -1,10 +1,7 @@
 import os
-from dotenv import load_dotenv
 from sqlalchemy.orm import sessionmaker
 from google.cloud.sql.connector import Connector
 from sqlalchemy import create_engine, MetaData, Table, Column, String, Integer, select, exists, or_, JSON, distinct
-
-load_dotenv("../.env")
 
 
 def connect_to_sql():

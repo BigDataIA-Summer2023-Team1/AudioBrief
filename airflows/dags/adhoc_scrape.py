@@ -1,26 +1,16 @@
-import os
-import math
+import sys
 import uuid
-import pandas as pd
 import datetime
-from dotenv import load_dotenv
 from datetime import timedelta
 
 from airflow.models import DAG
-from airflow.models.param import Param
 from airflow.utils.dates import days_ago
 from airflow.operators.python_operator import PythonOperator
 
-import sys
 sys.path.append('/opt/airflow/utils/')
 import cloud_sql as csql
 import file_processing as fp
 import gcs_service as gcs
-
-
-# from utils.cloud_sql import connect_to_sql, get_sql_client, insert_to_books_table, \
-#     check_if_books_exist, insert_to_last_read_table, fetch_last_read_book_id
-# from utils.file_processing import process_chapters, fetch_book_contents, fetch_book_medata
 
 
 #  Create DAG to load data
@@ -34,7 +24,6 @@ def adhoc_scrape(**context):
     sql_client = csql.get_sql_client(csql.connect_to_sql)
 
     # TODO: download file from GCP return file path
-    # process the file outline
     params = context['dag_run'].conf
     file_path = params.get("file_path")
 
@@ -64,7 +53,7 @@ def adhoc_scrape(**context):
     if books_exists:
         return
 
-    # # TODO: Check if we can make process_chapters step as async
+    # TODO: Check if we can make process_chapters step as async
     for chapter_metadata in chapters_metadata:
         fp.extract_chapter(local_file_path, chapter_metadata)
 

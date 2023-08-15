@@ -1,12 +1,7 @@
 import os
-from dotenv import load_dotenv
-
-from google.cloud.sql.connector import Connector
-
 from sqlalchemy.orm import sessionmaker
+from google.cloud.sql.connector import Connector
 from sqlalchemy import create_engine, MetaData, Table, Column, String, Integer, select, exists, or_, JSON
-
-# load_dotenv("../../.env")
 
 
 def connect_to_sql():
@@ -40,7 +35,6 @@ def check_if_books_exist(engine, data):
         # Define the metadata
         metadata = MetaData(bind=engine)
 
-        # table = Table(table_name, metadata, autoload=True, autoload_with=engine)
         books_table = Table(
             'books', metadata,
             Column('book_id', String(36), primary_key=True),
@@ -105,7 +99,6 @@ def insert_to_books_table(engine, data):
         # Define the metadata
         metadata = MetaData(bind=engine)
 
-        # table = Table(table_name, metadata, autoload=True, autoload_with=engine)
         books_table = Table(
             'books', metadata,
             Column('book_id', String(36), primary_key=True),
@@ -130,8 +123,6 @@ def insert_to_books_table(engine, data):
 
         # Close the session
         session.close()
-
-        # engine dispose
         engine.dispose()
     except Exception as e:
         print(str(e))
@@ -163,8 +154,6 @@ def insert_to_last_read_table(engine, data):
 
         # Close the session
         session.close()
-
-        # engine dispose
         engine.dispose()
     except Exception as e:
         print(str(e))

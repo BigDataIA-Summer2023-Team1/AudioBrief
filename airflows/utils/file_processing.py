@@ -1,4 +1,3 @@
-import math
 import PyPDF2
 import multiprocessing
 from pub_sub import publish_msg_to_topic
@@ -68,9 +67,6 @@ def extract_chapter(file_path, chapter_metadata):
     try:
         reader = PyPDF2.PdfReader(file_path)
         extracted_text = ""
-        print("================================================================================")
-        print(reader.metadata)
-        print("================================================================================")
 
         start_page = chapter_metadata["child_chapter_start_page"] if "child_chapter_title" in chapter_metadata \
             else chapter_metadata["main_chapter_start_page"]

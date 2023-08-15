@@ -10,7 +10,9 @@ RUN pip install --upgrade pip
 WORKDIR /app
 # Change working dir to app
 
-ADD main.py utils.py requirements.txt /app/
+ADD main.py requirements.txt /app/
+COPY models /app/models
+COPY utils /app/utils
 # Copy main.py and requirements.txt from local into app dir inside the container
 
 RUN pip install -r requirements.txt

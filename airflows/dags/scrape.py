@@ -1,14 +1,15 @@
+import sys
 import math
 import uuid
 import pandas as pd
 from datetime import timedelta
+
 from airflow.models import DAG
 from airflow.models.param import Param
 from airflow.utils.dates import days_ago
 from airflow.operators.python_operator import PythonOperator
 
 
-import sys
 
 sys.path.append('/opt/airflow/utils/')
 import cloud_sql as csql

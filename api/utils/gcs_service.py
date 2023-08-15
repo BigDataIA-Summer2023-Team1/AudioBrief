@@ -1,8 +1,5 @@
 import os
-from dotenv import load_dotenv
 from google.cloud import storage
-
-# load_dotenv('../.env')
 
 
 def read_text_file_without_downloading(file_name):
