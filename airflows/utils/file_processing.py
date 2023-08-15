@@ -42,11 +42,11 @@ def fetch_book_contents(bookId, file_path):
                 no_of_child_chapters = len(next_chapter) - 1
 
                 chapters_metadata.extend([{"bookId": bookId,
-                                           "main_chapter_title": item.title,
+                                           "main_chapter_title": item.title.replace(":", "").lower().replace(" ", "-"),
                                            "main_chapter_start_page": reader.get_destination_page_number(item),
                                            "main_chapter_end_page": fetch_end_page_number(reader, next_to_next_chapter),
                                            "child_chapter_title": child_chapter.title,
-                                           "title_disp": item.title + " " + child_chapter.title,
+                                           "title_disp": (item.title + " " + child_chapter.title).replace(":", "").replace("’","").replace(".", "").lower().replace(" ", "-"),
                                            "child_chapter_start_page": reader.get_destination_page_number(child_chapter),
                                            "child_chapter_end_page": reader.get_destination_page_number(next_chapter[
                                                                                                             child_chapter_idx + 1]) if child_chapter_idx + 1 <= no_of_child_chapters else fetch_end_page_number(
@@ -55,7 +55,7 @@ def fetch_book_contents(bookId, file_path):
             else:
                 if not isinstance(item, list) and next_chapter is not None:
                     chapters_metadata.append({"bookId": bookId,
-                                              "main_chapter_title": item.title,
+                                              "main_chapter_title": item.title.replace(":", "").replace("’","").replace(".", "").lower().replace(" ", "-"),
                                               "main_chapter_start_page": reader.get_destination_page_number(item),
                                               "main_chapter_end_page": fetch_end_page_number(reader, next_chapter)})
 
@@ -68,6 +68,9 @@ def extract_chapter(file_path, chapter_metadata):
     try:
         reader = PyPDF2.PdfReader(file_path)
         extracted_text = ""
+        print("================================================================================")
+        print(reader.metadata)
+        print("================================================================================")
 
         start_page = chapter_metadata["child_chapter_start_page"] if "child_chapter_title" in chapter_metadata \
             else chapter_metadata["main_chapter_start_page"]
@@ -89,7 +92,7 @@ def extract_chapter(file_path, chapter_metadata):
             "chapterText": extracted_text,
         }
 
-        topic_id = "books-chapters"
+        topic_id = "chapters"
         publish_msg_to_topic(topic_id, event_msg)
 
         return extracted_text

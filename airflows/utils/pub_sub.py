@@ -7,7 +7,7 @@ def publish_msg_to_topic(topic_id, msg):
     try:
         project_id = "audiobrief"
 
-        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "./publish-message-to-topic.json"
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "./utils/metadata-sql.json"
         publisher = pubsub_v1.PublisherClient()
 
         topic_path = publisher.topic_path(project_id, topic_id)

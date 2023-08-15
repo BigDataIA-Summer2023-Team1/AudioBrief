@@ -45,7 +45,7 @@ def check_if_books_exist(engine, data):
             'books', metadata,
             Column('book_id', String(36), primary_key=True),
             Column('source_id', Integer),
-            Column('title', String(80)),
+            Column('title', String(255)),
             Column('author', String(80)),
             Column('category', String(20)),
             Column('publish', Integer),
@@ -55,8 +55,7 @@ def check_if_books_exist(engine, data):
         )
 
         # Execute a SELECT EXISTS query with WHERE clause
-        query = select([exists().where(or_(books_table.c.source_id == data["sourceId"],
-                                            books_table.c.title == data["title"]))])
+        query = select([exists().where(books_table.c.title == data["title"])])
         result = engine.execute(query).scalar()
 
         # Close the session & close connection

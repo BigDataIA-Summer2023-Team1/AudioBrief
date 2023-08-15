@@ -1,19 +1,11 @@
-import os
 import math
 import uuid
 import pandas as pd
-from dotenv import load_dotenv
 from datetime import timedelta
-import pprint
 from airflow.models import DAG
 from airflow.models.param import Param
 from airflow.utils.dates import days_ago
-from airflow.models import TaskInstance
-
-from airflow.operators.subdag_operator import SubDagOperator
 from airflow.operators.python_operator import PythonOperator
-from airflow.operators.trigger_dagrun import TriggerDagRunOperator
-from airflow.models.baseoperator import BaseOperator
 
 
 import sys
@@ -36,12 +28,10 @@ def fetch_metadata(**context):
         no_of_records = len(data)
         last_row_to_process = data['ID'].iloc[-1]
 
-        context['ti'].xcom_push(key="metadata", value={"last_read_index": last_read_index, "no_of_records": no_of_records,
-                                                      "last_row_to_process": last_row_to_process})
+        context['ti'].xcom_push(key="metadata",
+                                value={"last_read_index": last_read_index, "no_of_records": no_of_records,
+                                       "last_row_to_process": last_row_to_process})
 
-        print("================================================================")
-        print(context["ti"].xcom_pull(key="metadata", dag_id="scrape_books_and_extract_chapters_and_load"))
-        print("================================================================")
     except Exception as e:
         msg = str(e)
 
@@ -52,7 +42,6 @@ def data_extraction(pipeline_no, **context):
 
         metadata = context["ti"].xcom_pull(key="metadata", task_ids="read_metadata",
                                            dag_id="scrape_books_and_extract_chapters_and_load")
-
 
         dataset_path = "https://raw.githubusercontent.com/BigDataIA-Summer2023-Team1/project/main/test-data.csv"
         # data = pd.read_csv(dataset_path, skiprows=metadata["last_read_index"])
@@ -75,6 +64,7 @@ def data_extraction(pipeline_no, **context):
                 "category": row["Category"] if row["Category"] else "",
                 "publish": row["Publish"] if row["Publish"] else 0,
                 "pages": row["Page"] if row["Page"] else 0,
+                "url": row["URL"] if row["URL"] else "",
             }
             books_metadata.append(book_metadata)
 
@@ -89,33 +79,51 @@ def data_extraction(pipeline_no, **context):
             gcs.download_pdf(row["URL"], file_path)
 
             chapters_metadata = fp.fetch_book_contents(bookID, file_path)
-            chapters = [chapter["titile_disp"] if "titile_disp" in chapter else chapter["main_chapter_title"] for chapter in
-                        chapters_metadata]
+            chapters = [chapter["title_disp"] if "title_disp" in chapter else chapter["main_chapter_title"] for
+                        chapter in chapters_metadata]
             chapters = f"{chapters}"
             book_metadata["chapters"] = chapters
 
             # TODO: Check if we can make process_chapters step as async
-            # fp.process_chapters(file_path, chapters_metadata)
+            # Method -1
+            # fp.process_chapters(book_metadata["url"], chapters_metadata)
 
+            # Method -2
+            for chapter_metadata in chapters_metadata:
+                fp.extract_chapter(file_path, chapter_metadata)
+
+            # Method -3: Trigger cloud function
+            chapters_metadata = [chapters_metadata[8]]
+            # payload = {
+            #     "file_path": book_metadata["url"],
+            #     "chapters_metadata": chapters_metadata
+            # }
+            # print("Payload: ============================================================")
+            # print(payload)
+            # print("============================================================")
+            # headers = {"Content-Type": "application/json"}
+            # resp = requests.post("https://us-east1-audiobrief.cloudfunctions.net/process_chapters",
+            #                      data=json.dumps(payload), headers=headers)
+            # if resp.status_code == 200:
+            #     print(resp)
+            # else:
+            #     print("failed process")
+
+            # Method -4:
             # context['ti'].xcom_push(key=subtask_id, value={"file_path": file_path,
             #                                                "book_metadata": book_metadata,
             #                                                "chapters_metadata": chapters_metadata})
-            print("================================================================")
-            print(book_metadata)
-            print(chapters_metadata)
-            print("================================================================")
-            trigger_task = TriggerDagRunOperator(
-                task_id=bookID,
-                trigger_dag_id='trigger_parallel_processing_dag',  # Name of the separate DAG
-                conf={"file_path": file_path, "book_metadata": book_metadata, "chapters_metadata": chapters_metadata},
-                dag=scrape_dag,
-            )
 
-            trigger_task
-
+            # Method -5:
+            # trigger_task = TriggerDagRunOperator(
+            #     task_id=bookID,
+            #     trigger_dag_id='trigger_parallel_processing_dag',  # Name of the separate DAG
+            #     conf={"file_path": file_path, "book_metadata": book_metadata, "chapters_metadata": chapters_metadata},
+            #     dag=scrape_dag,
+            # )
 
         # TODO: send async bulk event to store books metadata in cloud sql and log for any errors
-        # csql.insert_to_books_table(sql_client, books_metadata)
+        csql.insert_to_books_table(sql_client, books_metadata)
 
     except Exception as e:
         msg = str(e)
@@ -242,44 +250,40 @@ user_input = {
     "no_of_threads": Param(default=3, type='number'),
 }
 
-trigger_parallel_processing_dag = DAG(
-    dag_id='trigger_parallel_processing_dag',
-    schedule_interval=None,  # You might want to set this based on your needs
-    start_date=days_ago(0),
-    catchup=False,
-    params=user_input,
-)
-
-with trigger_parallel_processing_dag:
-    step_1 = PythonOperator(
-        task_id='step_2',
-        python_callable=process_chapters_in_pipeline,
-        provide_context=True,
-        op_kwargs={"subtask_pipeline_no": 1},
-        dag=trigger_parallel_processing_dag
-    )
-
-    step_2 = PythonOperator(
-        task_id='step_3',
-        python_callable=process_chapters_in_pipeline,
-        provide_context=True,
-        op_kwargs={"subtask_pipeline_no": 2},
-        dag=trigger_parallel_processing_dag
-    )
-
-    step_3 = PythonOperator(
-        task_id='step_4',
-        python_callable=process_chapters_in_pipeline,
-        provide_context=True,
-        op_kwargs={"subtask_pipeline_no": 3},
-        dag=trigger_parallel_processing_dag
-    )
-
-    step_1, step_2, step_3
-
-
-
-
+# trigger_parallel_processing_dag = DAG(
+#     dag_id='trigger_parallel_processing_dag',
+#     schedule_interval=None,  # You might want to set this based on your needs
+#     start_date=days_ago(0),
+#     catchup=False,
+#     params=user_input,
+# )
+#
+# with trigger_parallel_processing_dag:
+#     step_1 = PythonOperator(
+#         task_id='step_2',
+#         python_callable=process_chapters_in_pipeline,
+#         provide_context=True,
+#         op_kwargs={"subtask_pipeline_no": 1},
+#         dag=trigger_parallel_processing_dag
+#     )
+#
+#     step_2 = PythonOperator(
+#         task_id='step_3',
+#         python_callable=process_chapters_in_pipeline,
+#         provide_context=True,
+#         op_kwargs={"subtask_pipeline_no": 2},
+#         dag=trigger_parallel_processing_dag
+#     )
+#
+#     step_3 = PythonOperator(
+#         task_id='step_4',
+#         python_callable=process_chapters_in_pipeline,
+#         provide_context=True,
+#         op_kwargs={"subtask_pipeline_no": 3},
+#         dag=trigger_parallel_processing_dag
+#     )
+#
+#     step_1, step_2, step_3
 
 scrape_dag = DAG(
     dag_id="scrape_books_and_extract_chapters_and_load",
