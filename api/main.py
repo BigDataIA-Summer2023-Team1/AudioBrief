@@ -315,6 +315,7 @@ def signup(user: Users):
 @app.post("/api/v1/users/login/")
 def login(request: Request, user: UsersLogin):
     try:
+        print("here there")
         conn = get_sql_client(connect_to_sql)
         user_exists = check_if_user_exist(conn, data={"email": user.email})
         if not user_exists:
@@ -325,6 +326,16 @@ def login(request: Request, user: UsersLogin):
             raise HTTPException(status_code=400, detail=f"user email or password didn't matched.")
 
         token = create_access_token({"email": user.email, "plan": user_data["plan"], "role": user_data["role"]})
+        payload = {
+            "endpoint": "/api/v1/users/login/",
+            "timestamp": datetime.datetime.now(),
+            "user": user.email,
+            "status": 200,
+            "execution_time": "",
+            "msg": "user logged in"
+        }
+
+        log.log_text(str(payload), resource=resource, severity="INFO")
 
         return {"access_token": token}
     except Exception as e:

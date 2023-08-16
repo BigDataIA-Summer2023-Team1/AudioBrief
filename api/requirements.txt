@@ -4,3 +4,12 @@ passlib
 python-jose==3.3.0
 bcrypt
 google-cloud-logging
+python-dotenv
+requests
+google-cloud-storage==2.9.0
+SQLAlchemy
+cloud-sql-python-connector[pg8000]
+PyPDF2
+google-cloud-pubsub
+redis
+PyJWT
