@@ -1,0 +1,11 @@
+functions-framework==3.*
+google-cloud-storage==2.9.0
+SQLAlchemy
+python-dotenv
+cloud-sql-python-connector
+cloud-sql-python-connector[pg8000]
+requests
+PyPDF2
+google-cloud-storage
+google-cloud-pubsub
+google-cloud-logging

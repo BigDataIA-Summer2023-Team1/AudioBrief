@@ -1,0 +1,5 @@
+functions-framework==3.*
+langchain
+tiktoken
+openai
+google-cloud-storage
