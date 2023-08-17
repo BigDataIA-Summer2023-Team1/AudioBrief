@@ -2,7 +2,7 @@
 
 - Please use this application responsibly, as we have limited free credits remaining.
 ### Production Links
-[![codelabs](https://img.shields.io/badge/Initial%20Plan%20Documentation-4285F4?style=for-the-badge&logo=codelabs&logoColor=white)](https://codelabs-preview.appspot.com/?file_id=1tawz6aVeswcHqI2OKAxYyYzYdJ5Nxs-1t2lzuXzI5OU)
+[![codelabs](https://img.shields.io/badge/CodeLabs-4285F4?style=for-the-badge&logo=codelabs&logoColor=white)](https://codelabs-preview.appspot.com/?file_id=1tawz6aVeswcHqI2OKAxYyYzYdJ5Nxs-1t2lzuXzI5OU)
 
 [![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=Streamlit&logoColor=white)](http://34.138.113.236:30006)
 
@@ -11,6 +11,8 @@
 [![Apache Airflow](https://img.shields.io/badge/Apache_Airflow-007A88?style=for-the-badge&logo=Apache%20Airflow&logoColor=white)](http://34.138.113.236:8080)
 
 [![Redis](https://img.shields.io/badge/redis-%23DD0031.svg?style=for-the-badge&logo=redis&logoColor=white)](http://34.138.113.236:6379)
+
+[![Video](https://img.shields.io/badge/video-%23DD0031.svg?style=for-the-badge&logoColor=white)](https://drive.google.com/file/d/1GFd3JeLF9VY8GQ8nvb_lXUsd6PQe5V9c/view?usp=sharing)
 
 ### Initial Plan
 [![colab-notebook](https://img.shields.io/badge/POC%20Notebook-yellow?style=for-the-badge&logo=codelabs&logoColor=white)](https://colab.research.google.com/drive/1COctuUYK7zId6TwHbA3vvXOj1GPeIDFI?usp=sharing)
