@@ -172,8 +172,8 @@ To run the application locally, follow these steps:
 
 ## Team Information and Contribution
 
-Name | Contributions 
---- | --- |
-Sanjana Karra | Cloud functions for converting TTS and store to Cloud SQL & Buckets, function to generate the summary to chapters 
-Nikhil Reddy Polepally | Designed streamlit screens, Build API for the use cases with rate limmiter
-Shiva Sai Charan Ruthala | Airflow Pipeline with threading, Deployment and Infrastructure setup, Logging, User Dashboard, Testing, Documentation
+Contributions 
+--- |
+Cloud functions for converting TTS and store to Cloud SQL & Buckets, function to generate the summary to chapters 
+Designed streamlit screens, Build API for the use cases with rate limmiter
+Airflow Pipeline with threading, Deployment and Infrastructure setup, Logging, User Dashboard, Testing, Documentation
